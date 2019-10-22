@@ -9,9 +9,10 @@ image_resource:
 
 inputs:
 - name: concourse-pipeline-samples
-
-outputs:
 - name: current-app-info
 
+outputs:
+- name: app-manifest-output
+
 run:
-  path: concourse-pipeline-samples/blue-green-app-deployment/ci/tasks/current-app-get-info
+  path: concourse-pipeline-samples/ci/tasks/app-manifest-prep

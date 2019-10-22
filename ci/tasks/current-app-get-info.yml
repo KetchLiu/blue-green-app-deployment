@@ -4,12 +4,14 @@ platform: linux
 image_resource:
   type: docker-image
   source:
-    repository: djudorange/node-gulp-mocha
+    repository: pivotalservices/docker-concourse-cf-tools
     tag: "latest"
 
 inputs:
 - name: concourse-pipeline-samples
+
+outputs:
 - name: current-app-info
 
 run:
-  path: concourse-pipeline-samples/blue-green-app-deployment/ci/tasks/load-tests
+  path: concourse-pipeline-samples/ci/tasks/current-app-get-info

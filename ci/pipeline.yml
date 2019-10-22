@@ -1,0 +1,139 @@
+groups:
+- name: main
+  jobs:
+  - unit-tests
+  - deploy-app
+  - load-tests
+  - promote-new-version
+
+resources:
+- name: concourse-pipeline-samples
+  type: git
+  source:
+    uri: git@github.com:KetchLiu/blue-green-app-deployment.git
+    branch: master
+    private_key: |
+      -----BEGIN RSA PRIVATE KEY-----
+      MIIEogIBAAKCAQEA6IpnXC174ZANm9I5DLyv6nQ/EfSyWgqry1xWMCMEFU2TpTRJ
+      hS6hvyPt6VPexLmKVsyjqhLeaYAgBq3YZtp5eI5e6IOEkL8U+T03uN3Xa27PuSzz
+      hcHl46Z0tjlhAaKCVAIcVSFoD9G2dJ1mdODNeJq34CyfgMqewnT8I/oAUEkVTUQf
+      WM7XmeTlUvtjmW/13OKL5Yv73z+lo7gcWzLWuEQPm4QcDTcFXKBqybm3MnSwXAQV
+      eu+gluY2bQ8k5BJBZN8xgEdjmcIPNdDfPPs89LfBPb9XVhQBGZ8IQKHN2ZfF77nr
+      JtCRx9njjW3PIvwjJL5YlK/rddSYC/lqhjwYVQIBIwKCAQBWX0r2WglxCZ6nlznC
+      5v+C9/orPaFUpOC5P426G6JuUAOjwva8cGf2ibAjduxXsqEY7OxVHPOGRYg8/r4X
+      kvnq8w1PDEcuctvni8Q9WbZpu3G5zt4bvQw+nOmFgwbGF8oB8ifH2TVHtEsVXwjM
+      U3+EkTz7fknfYTOnUAXheh1fpWia9GYiN9pZDS11izhsVfoToiBBlG6AqIJB6KtO
+      SkkwxqPDj2+hAVuiRGlV7esBi4mfkfXe2z27YcIAujCoKqkVjeg6V5s/ZCjsUn7/
+      dSsh4o4rN6C1PiV/QepmNRSBYM18bHrnPm2PiSC5ZIGh2mxIx3Jzf2NgyZ4OR9og
+      UN9fAoGBAPTRrTyI0wEl70VfgxGu6QacTbWZqopoRacDD9p28DEgUMPBXTa3ekwo
+      HWG1PmjtLoP0HPJ8pjpj1tNBrwb3SSwS1M5jfLZRPpIi4Prgc05WiT7NmAqeDxon
+      LZdrnZ6Alsny/mNNeUynqX0Mj6iQgi9DJEp+tDW4scVtg8VI9bMPAoGBAPMpLEX9
+      tDvS+YgFxms9AeuB4FgReTRD+T15DnSvBH4UoWuQkQeQka7OaGOjSYbK9eFEIxbh
+      XZidCDF4L8JPaeuh2xlEo7yKJw7ldD+swqHgfciZVnSorFqb06r8625LcoP8g8bN
+      OQp2XL+hbRhU3x8dqHd8kQyk3J8870ZIu25bAoGAG/q0tnYJfHldLH/xuODKLKQm
+      I2IE3J4z2JKiueG1DO3AFl892l4cmv1FL7zxMJAikrzQG7Z5ZcJEb+o/44n5u+Tl
+      HubMbJuSH1Rxe8HhSsgPr2f0Hnh2wSkMhlVxGW3IFxR02CYcfcoEvdWMws6vyuMa
+      FyRsXek441z5Hdxz2fMCgYEAn8qZb9KbAr3XLYAjTckBQv2TbRLL/cZEs14uEine
+      YXtFgTMdef/qtLOGbVysqQkH+m6at0Oj5/Ip9J9v13YDxrrRzsa0vbnfJwvQDJYZ
+      gFGxvlYi3vJ/48V8d62ExNJ+c/21robcV1UYYKvomvXxtVyh6B6odgXwEN7mYWL+
+      030CgYEAt3uqS2UuI7jA3gEcTHT38MII1jG6cfLJP4fli7c1IWA/053C6CxewCcq
+      6vksp/fRbUhTX1g/77Rr9YImwCM2pOKZSLaXRRwKzK7Fr9i0A77WIpR4AZaoUC2D
+      F3Sh/iuWllJeT1jG7Ag+/IszR1USPJ1ia6hdcPXA5F9xbAM0UpQ=
+      -----END RSA PRIVATE KEY-----
+
+- name: PWS
+  type: cf
+  source:
+    api: {{pws-api}}
+    organization: {{pws-organization}}
+    username: {{deploy-username}}
+    password: {{deploy-password}}
+    skip_cert_check: true
+    space: {{pws-space}}
+
+jobs:
+- name: unit-tests
+  serial: true
+  public: true
+  plan:
+  - get: concourse-pipeline-samples
+    trigger: true
+  - task: run-unit-tests
+    file: concourse-pipeline-samples/ci/tasks/unit-tests.yml
+
+- name: deploy-app
+  serial: true
+  public: true
+  plan:
+  - get: concourse-pipeline-samples
+    trigger: true
+    passed:
+      - unit-tests
+  - task: get-current-app-color
+    file: concourse-pipeline-samples/ci/tasks/current-app-get-info.yml
+    params:
+      PWS_APP_SUFFIX: {{pws-app-suffix}}
+      PWS_API: {{pws-api}}
+      PWS_ORG: {{pws-organization}}
+      PWS_USER: {{deploy-username}}
+      PWS_PWD: {{deploy-password}}
+      PWS_SPACE: {{pws-space}}
+  - task: prepare-app-manifest
+    file: concourse-pipeline-samples/ci/tasks/app-manifest-prep.yml
+    params:
+      PWS_APP_SUFFIX: {{pws-app-suffix}}
+  - put: PWS
+    params:
+      manifest: app-manifest-output/manifest.yml
+      path: concourse-pipeline-samples/bgd-app
+
+- name: load-tests
+  serial: true
+  public: true
+  plan:
+  - get: concourse-pipeline-samples
+    trigger: true
+    passed:
+      - deploy-app
+  - task: get-current-app-color
+    file: concourse-pipeline-samples/ci/tasks/current-app-get-info.yml
+    params:
+      PWS_APP_SUFFIX: {{pws-app-suffix}}
+      PWS_API: {{pws-api}}
+      PWS_ORG: {{pws-organization}}
+      PWS_USER: {{deploy-username}}
+      PWS_PWD: {{deploy-password}}
+      PWS_SPACE: {{pws-space}}
+  - task: run-load-tests
+    file: concourse-pipeline-samples/ci/tasks/load-tests.yml
+    params:
+      PWS_APP_SUFFIX: {{pws-app-suffix}}
+      PWS_APP_DOMAIN: {{pws-app-domain}}
+
+- name: promote-new-version
+  serial: true
+  public: true
+  plan:
+  - get: concourse-pipeline-samples
+    trigger: true
+    passed:
+      - load-tests
+  - task: get-current-app-color
+    file: concourse-pipeline-samples/ci/tasks/current-app-get-info.yml
+    params:
+      PWS_APP_SUFFIX: {{pws-app-suffix}}
+      PWS_API: {{pws-api}}
+      PWS_ORG: {{pws-organization}}
+      PWS_USER: {{deploy-username}}
+      PWS_PWD: {{deploy-password}}
+      PWS_SPACE: {{pws-space}}
+  - task: switch-app-routes
+    file: concourse-pipeline-samples/ci/tasks/update-routes.yml
+    params:
+      PWS_APP_SUFFIX: {{pws-app-suffix}}
+      PWS_APP_DOMAIN: {{pws-app-domain}}
+      PWS_API: {{pws-api}}
+      PWS_ORG: {{pws-organization}}
+      PWS_USER: {{deploy-username}}
+      PWS_PWD: {{deploy-password}}
+      PWS_SPACE: {{pws-space}}
